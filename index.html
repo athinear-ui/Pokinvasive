@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pokinvasive</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Familjen+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f3f5f1; --sheet:#ffffff; --ink:#1d2a22; --muted:#5d6b62; --line:#d5ddd6;
+  --accent:#b8325e; --accent-ink:#ffffff; --land:#e3e9e2; --warn:#a3561a; --ok:#2f6b47;
+  --f-display:"Young Serif", Georgia, serif;
+  --f-body:"Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#121815; --sheet:#1a221e; --ink:#e4ebe5; --muted:#9aa89f; --line:#2f3b34;
+  --accent:#ec6d98; --accent-ink:#1a0d12; --land:#26312b; --warn:#e09a5c; --ok:#7cc59a; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:auto minmax(0,1fr);height:100%}
+header.top{grid-column:1/-1;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--line);background:var(--sheet)}
+header.top h1{font-family:var(--f-display);font-weight:400;font-size:1.6rem;margin:0}
+header.top .sub{color:var(--muted);font-size:.9rem}
+header.top .count{margin-left:auto;font-family:var(--f-mono);font-size:.85rem;color:var(--muted)}
+
+.mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:var(--land)}
+#map.picking{cursor:crosshair}
+.pickbar{position:absolute;z-index:1000;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:999px;font-size:.88rem;display:flex;gap:10px;align-items:center;max-width:calc(100% - 120px)}
+.pickbar button{background:none;border:1px solid currentColor;border-radius:999px;padding:2px 10px;cursor:pointer;color:inherit}
+.legend{background:var(--sheet);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:.8rem;display:flex;flex-direction:column;gap:5px;max-width:260px}
+.legend .row{display:flex;gap:8px;flex-wrap:wrap}
+.legend .k{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+.sw{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.leaflet-container{font-family:var(--f-body)}
+
+aside{border-left:1px solid var(--line);background:var(--sheet);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:12px 8px;cursor:pointer;color:var(--muted);font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.pane{overflow:auto;padding:16px;min-height:0;flex:1}
+.pane h2{font-family:var(--f-display);font-weight:400;font-size:1.25rem;margin:0 0 4px}
+.hint{color:var(--muted);font-size:.86rem;margin:0}
+
+form{display:flex;flex-direction:column;gap:14px;margin-top:12px}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f > label,.lbl{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.f input,.f select,.f textarea{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+.f textarea{min-height:80px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.unit{position:relative}
+.unit input{padding-right:38px}
+.unit span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--f-mono);font-size:.82rem;pointer-events:none}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg label{flex:1;text-align:center;padding:8px 6px;cursor:pointer;border-right:1px solid var(--line);background:var(--paper)}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--ink);color:var(--paper);font-weight:600}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:500;text-decoration:none;color:inherit;display:inline-block}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);padding:11px 14px;font-size:1rem}
+.btn.danger{color:var(--accent);border-color:var(--accent);background:transparent}
+.btn:disabled{opacity:.55;cursor:default}
+.drop{border:1.5px dashed var(--muted);border-radius:10px;padding:14px;text-align:center;cursor:pointer;color:var(--muted);font-size:.9rem;display:flex;flex-direction:column;gap:8px;align-items:center}
+.drop.over{border-color:var(--accent)}
+.drop img{max-height:160px;border-radius:6px}
+.msg{font-size:.86rem;padding:8px 10px;border-radius:8px;background:var(--paper);border:1px solid var(--line)}
+.msg.err{border-color:var(--accent);color:var(--accent)}
+.msg.ok{border-color:var(--ok);color:var(--ok)}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px}
+.toolbar select{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:7px 8px;min-width:0;flex:1 1 100%}
+.list{border-top:1px solid var(--line)}
+.item{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;padding:12px 4px;border:0;border-bottom:1px solid var(--line);cursor:pointer;background:none;text-align:left;width:100%}
+.item:hover{background:var(--paper)}
+.thumb{width:56px;height:56px;border-radius:8px;background:var(--land);object-fit:cover;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.7rem;text-align:center}
+.item .t{font-weight:600;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.item .m{color:var(--muted);font-size:.84rem;display:block}
+.chip{font-size:.72rem;padding:1px 7px;border-radius:999px;border:1px solid var(--line);font-weight:500;color:var(--muted)}
+.chip.seedy{border-color:var(--warn);color:var(--warn)}
+.empty{padding:24px 8px;color:var(--muted);text-align:center}
+.detail img{width:100%;border-radius:10px;max-height:340px;object-fit:cover;background:var(--land);margin-top:12px}
+.dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;margin:14px 0}
+.dl dt{color:var(--muted);font-size:.84rem}
+.dl dd{margin:0;overflow-wrap:anywhere}
+.dl a{color:var(--accent)}
+.back{background:none;border:0;color:var(--muted);cursor:pointer;padding:0;margin-bottom:10px}
+.data{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+
+@media (max-width: 820px){
+  html,body{height:auto}
+  .app{grid-template-columns:1fr;grid-template-rows:auto 60vh auto;height:auto}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  .pane{overflow:visible}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Pokinvasive</h1>
+    <span class="sub">Plantes exotiques envahissantes · Dijon et alentours</span>
+    <span class="count" id="count">—</span>
+  </header>
+
+  <div class="mapwrap">
+    <div id="map" aria-label="Carte des relevés"></div>
+    <div class="pickbar" id="pickbar" hidden>
+      <span>Touchez la carte à l'endroit du relevé</span>
+      <button id="pickcancel" type="button">Annuler</button>
+    </div>
+  </div>
+
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-new" aria-selected="true">Nouveau relevé</button>
+      <button role="tab" id="tab-list" aria-selected="false">Registre</button>
+    </div>
+
+    <section class="pane" id="pane-new">
+      <h2>Nouveau relevé</h2>
+      <p class="hint">Sur le terrain, « Ma position » remplit les coordonnées depuis le GPS du téléphone. Une photo géolocalisée les remplit aussi.</p>
+      <form id="form" novalidate>
+        <div class="f">
+          <span class="lbl">Photo</span>
+          <label class="drop" id="drop" for="photo">
+            <span id="dropTxt">Prendre ou choisir une photo</span>
+            <img id="preview" alt="Aperçu de la photo" hidden>
+          </label>
+          <input type="file" id="photo" accept="image/*" hidden>
+        </div>
+        <div class="f">
+          <label for="espece">Espèce</label>
+          <input id="espece" list="especes" placeholder="ex. Ailante glanduleux" autocomplete="off">
+          <datalist id="especes"></datalist>
+        </div>
+        <div class="f">
+          <label for="date">Date</label>
+          <input type="date" id="date" required>
+        </div>
+        <div class="grid2">
+          <div class="f">
+            <label for="hauteur">Hauteur approx.</label>
+            <div class="unit"><input id="hauteur" type="number" min="0" step="0.1" inputmode="decimal" class="mono"><span>m</span></div>
+          </div>
+          <div class="f">
+            <label for="surface">Surface approx.</label>
+            <div class="unit"><input id="surface" type="number" min="0" step="1" inputmode="decimal" class="mono"><span>m²</span></div>
+          </div>
+        </div>
+        <div class="f">
+          <span class="lbl" id="graines-lbl">Présence de graines</span>
+          <div class="seg" role="radiogroup" aria-labelledby="graines-lbl">
+            <label><input type="radio" name="graines" id="g-oui" value="oui"><span>Oui</span></label>
+            <label><input type="radio" name="graines" id="g-non" value="non" checked><span>Non</span></label>
+            <label><input type="radio" name="graines" id="g-nsp" value="incertain"><span>Incertain</span></label>
+          </div>
+        </div>
+        <div class="f">
+          <span class="lbl">Coordonnées GPS (WGS84, degrés décimaux)</span>
+          <div class="grid2">
+            <input id="lat" class="mono" inputmode="decimal" placeholder="Latitude 47.3218" aria-label="Latitude">
+            <input id="lon" class="mono" inputmode="decimal" placeholder="Longitude 5.0414" aria-label="Longitude">
+          </div>
+          <div class="btns">
+            <button type="button" class="btn" id="geoloc">Ma position</button>
+            <button type="button" class="btn" id="pickbtn">Pointer sur la carte</button>
+          </div>
+          <span class="hint" id="gpsnote"></span>
+        </div>
+        <div class="f">
+          <label for="desc">Descriptif (facultatif)</label>
+          <textarea id="desc" placeholder="Milieu, densité, stade phénologique, gestion en cours…"></textarea>
+        </div>
+        <div id="formmsg" class="msg" hidden></div>
+        <button type="submit" class="btn primary" id="save">Enregistrer le relevé</button>
+      </form>
+    </section>
+
+    <section class="pane" id="pane-list" hidden>
+      <div id="listview">
+        <h2>Registre</h2>
+        <div class="toolbar">
+          <select id="filt" aria-label="Filtrer par espèce"><option value="">Toutes les espèces</option></select>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="data">
+          <span class="lbl">Données</span>
+          <p class="hint">Les relevés sont enregistrés dans ce navigateur, sur cet appareil. Faites une sauvegarde régulièrement, et utilisez-la pour transférer vos relevés vers un autre appareil.</p>
+          <div class="btns">
+            <button class="btn" id="exportCsv" type="button">Exporter CSV</button>
+            <button class="btn" id="exportJson" type="button">Sauvegarde complète</button>
+            <label class="btn" for="importFile">Importer…</label>
+            <input type="file" id="importFile" accept=".json,.csv,application/json,text/csv" hidden>
+          </div>
+          <div id="datamsg" class="msg" hidden></div>
+        </div>
+      </div>
+      <div id="detail" class="detail" hidden></div>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const SPECIES=["Ailante glanduleux (Ailanthus altissima)","Robinier faux-acacia (Robinia pseudoacacia)","Renouée du Japon (Reynoutria japonica)","Ambroisie à feuilles d'armoise (Ambrosia artemisiifolia)","Buddleia de David (Buddleja davidii)","Vergerette du Canada (Erigeron canadensis)","Séneçon du Cap (Senecio inaequidens)","Raisin d'Amérique (Phytolacca americana)","Balsamine de l'Himalaya (Impatiens glandulifera)","Solidage du Canada (Solidago canadensis)","Vigne-vierge (Parthenocissus inserta)","Érable négondo (Acer negundo)","Mimosa (Acacia dealbata)","Canne de Provence (Arundo donax)"];
+const PAL=["#c2410c","#7c3aed","#0f766e","#b8325e","#4d7c0f","#1d4ed8","#a16207","#be185d","#0e7490","#6d28d9"];
+const DIJON=[47.322,5.041];
+
+/* ---------- Stockage local (IndexedDB) ---------- */
+const DB_NAME="pokinvasive", STORE="obs";
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore(STORE,{keyPath:"id"})};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+let idb=null;
+function tx(mode,fn){return new Promise((res,rej)=>{const t=idb.transaction(STORE,mode);const s=t.objectStore(STORE);const out=fn(s);
+  t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+const dbAll=()=>tx("readonly",s=>s.getAll());
+const dbPut=o=>tx("readwrite",s=>s.put(o));
+const dbDel=id=>tx("readwrite",s=>s.delete(id));
+const newId=()=>"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ---------- Carte ---------- */
+const map=L.map("map",{zoomControl:true}).setView(DIJON,13);
+const ign=(layer,fmt)=>`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=normal&TILEMATRIXSET=PM&FORMAT=${fmt}&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`;
+const layers={
+  "Plan OpenStreetMap":L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">contributeurs OpenStreetMap</a>'}),
+  "Plan IGN":L.tileLayer(ign("GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2","image/png"),{maxZoom:19,attribution:'&copy; <a href="https://www.ign.fr/">IGN</a>'}),
+  "Photos aériennes IGN":L.tileLayer(ign("ORTHOIMAGERY.ORTHOPHOTOS","image/jpeg"),{maxZoom:19,attribution:'&copy; <a href="https://www.ign.fr/">IGN</a>'})
+};
+let baseName="Plan OpenStreetMap";
+try{const b=localStorage.getItem("pokinvasive.fond");if(b&&layers[b])baseName=b}catch(e){}
+layers[baseName].addTo(map);
+L.control.layers(layers,null,{position:"topright"}).addTo(map);
+map.on("baselayerchange",e=>{try{localStorage.setItem("pokinvasive.fond",e.name)}catch(_){}});
+L.control.scale({imperial:false,position:"bottomright"}).addTo(map);
+
+const mkLayer=L.layerGroup().addTo(map);
+let pickMarker=null, accCircle=null;
+const legendCtl=L.control({position:"bottomleft"});
+legendCtl.onAdd=()=>{const d=L.DomUtil.create("div","legend");d.id="legend";L.DomEvent.disableClickPropagation(d);return d};
+legendCtl.addTo(map);
+
+/* ---------- État ---------- */
+let obs=[], selected=null, filter="";
+const urls=new Map();
+const photoUrl=o=>{if(!o.photo)return"";if(!urls.has(o.id))urls.set(o.id,URL.createObjectURL(o.photo));return urls.get(o.id)};
+const spColor=(()=>{const m=new Map();return sp=>{const k=shortSp(sp).toLowerCase();if(!m.has(k)){let h=0;for(const ch of k)h=(h*31+ch.charCodeAt(0))>>>0;m.set(k,PAL[h%PAL.length])}return m.get(k)}})();
+function shortSp(sp){return (sp||"Espèce non précisée").split("(")[0].trim()}
+const fmtDate=d=>{if(!d)return"—";const [y,m,j]=d.split("-");return `${j}/${m}/${y}`};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const osm=(la,lo)=>`https://www.openstreetmap.org/?mlat=${la.toFixed(6)}&mlon=${lo.toFixed(6)}#map=18/${la.toFixed(6)}/${lo.toFixed(6)}`;
+const geop=(la,lo)=>`https://www.geoportail.gouv.fr/carte?c=${lo.toFixed(6)},${la.toFixed(6)}&z=18&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
+const visible=()=>obs.filter(o=>!filter||shortSp(o.espece)===filter);
+const sortObs=()=>obs.sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));
+
+function renderMarkers(){
+  mkLayer.clearLayers();
+  for(const o of visible()){
+    if(!isFinite(o.lat)||!isFinite(o.lon))continue;
+    const c=spColor(o.espece),sel=selected===o.id;
+    const style=o.graines==="oui"?{radius:sel?10:8,color:"#ffffff",weight:2,fillColor:c,fillOpacity:1}
+      :{radius:sel?9:7,color:c,weight:3,fillColor:"#ffffff",fillOpacity:.9,dashArray:o.graines==="incertain"?"3 3":null};
+    const m=L.circleMarker([o.lat,o.lon],style).addTo(mkLayer);
+    m.bindTooltip(`${esc(shortSp(o.espece))} · ${fmtDate(o.date)}`);
+    m.on("click",ev=>{if(picking)return;L.DomEvent.stopPropagation(ev);showDetail(o.id)});
+    if(sel)m.bringToFront();
+  }
+}
+function renderLegend(){
+  const sps=[...new Set(visible().map(o=>shortSp(o.espece)))].slice(0,8);
+  $("legend").innerHTML=`<div class="row"><span class="k"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="#888"/></svg>graines</span>
+  <span class="k"><svg width="14" height="14"><circle cx="7" cy="7" r="4.6" fill="#fff" stroke="#888" stroke-width="2.2"/></svg>sans</span>
+  <span class="k"><svg width="14" height="14"><circle cx="7" cy="7" r="4.6" fill="#fff" stroke="#888" stroke-width="2.2" stroke-dasharray="2 1.6"/></svg>incertain</span></div>`+
+  (sps.length?`<div class="row">${sps.map(s=>`<span class="k"><span class="sw" style="background:${spColor(s)}"></span>${esc(s)}</span>`).join("")}</div>`:"");
+}
+function renderList(){
+  const sps=[...new Set(obs.map(o=>shortSp(o.espece)))].sort((a,b)=>a.localeCompare(b,"fr"));
+  $("filt").innerHTML=`<option value="">Toutes les espèces (${obs.length})</option>`+sps.map(s=>`<option value="${esc(s)}"${s===filter?" selected":""}>${esc(s)} (${obs.filter(o=>shortSp(o.espece)===s).length})</option>`).join("");
+  const L_=$("list"),v=visible();
+  if(!v.length){L_.innerHTML=`<div class="empty">${obs.length?"Aucun relevé pour cette espèce.":"Aucun relevé pour l'instant.<br>Ajoutez le premier depuis l'onglet « Nouveau relevé »."}</div>`;return}
+  L_.innerHTML="";
+  for(const o of v){
+    const b=document.createElement("button");b.className="item";b.type="button";const src=photoUrl(o);
+    b.innerHTML=`${src?`<img class="thumb" src="${src}" alt="">`:`<span class="thumb">sans photo</span>`}
+      <span><span class="t"><span class="sw" style="background:${spColor(o.espece)}"></span>${esc(shortSp(o.espece))}
+      ${o.graines==="oui"?'<span class="chip seedy">graines</span>':o.graines==="incertain"?'<span class="chip">graines ?</span>':""}</span>
+      <span class="m mono">${fmtDate(o.date)} · ${isFinite(o.lat)?o.lat.toFixed(5)+", "+o.lon.toFixed(5):"sans coordonnées"}</span>
+      <span class="m">${[o.hauteur!=null?`h ≈ ${o.hauteur} m`:"",o.surface!=null?`≈ ${o.surface} m²`:""].filter(Boolean).join(" · ")}</span></span>`;
+    b.onclick=()=>showDetail(o.id,true);L_.appendChild(b);
+  }
+}
+function renderAll(){
+  sortObs();
+  $("count").textContent=`${obs.length} relevé${obs.length>1?"s":""} · ${obs.filter(o=>o.graines==="oui").length} avec graines`;
+  renderMarkers();renderLegend();renderList();
+  if(selected&&!$("detail").hidden){const o=obs.find(x=>x.id===selected);if(o)fillDetail(o);else closeDetail()}
+}
+
+/* ---------- Onglets / détail ---------- */
+function tab(w){$("tab-new").setAttribute("aria-selected",w==="new");$("tab-list").setAttribute("aria-selected",w==="list");$("pane-new").hidden=w!=="new";$("pane-list").hidden=w!=="list";updatePickMarker()}
+$("tab-new").onclick=()=>tab("new");$("tab-list").onclick=()=>tab("list");
+$("filt").onchange=e=>{filter=e.target.value;renderMarkers();renderLegend();renderList()};
+const mobile=()=>window.matchMedia("(max-width:820px)").matches;
+function showDetail(id,center){
+  const o=obs.find(x=>x.id===id);if(!o)return;selected=id;tab("list");
+  $("listview").hidden=true;$("detail").hidden=false;fillDetail(o);renderMarkers();
+  if(center&&isFinite(o.lat))map.setView([o.lat,o.lon],Math.max(map.getZoom(),17));
+  if(mobile()&&!center)$("detail").scrollIntoView({block:"start"});
+}
+function closeDetail(){selected=null;$("detail").hidden=true;$("listview").hidden=false;renderMarkers()}
+function fillDetail(o){
+  const src=photoUrl(o);let armed=false;
+  $("detail").innerHTML=`<button class="back" id="back" type="button">← Retour au registre</button>
+   <h2>${esc(shortSp(o.espece))}</h2>
+   ${o.espece&&o.espece.includes("(")?`<p class="hint"><i>${esc(o.espece.split("(")[1].replace(")",""))}</i></p>`:""}
+   ${src?`<img src="${src}" alt="Photo du relevé">`:""}
+   <dl class="dl">
+    <dt>Date</dt><dd class="mono">${fmtDate(o.date)}</dd>
+    <dt>Hauteur</dt><dd class="mono">${o.hauteur!=null?`≈ ${o.hauteur} m`:"—"}</dd>
+    <dt>Surface</dt><dd class="mono">${o.surface!=null?`≈ ${o.surface} m²`:"—"}</dd>
+    <dt>Graines</dt><dd>${o.graines==="oui"?"Oui":o.graines==="incertain"?"Incertain":"Non"}</dd>
+    <dt>GPS</dt><dd class="mono">${isFinite(o.lat)?`${o.lat.toFixed(6)}, ${o.lon.toFixed(6)}`:"—"}${o.precision!=null?` (± ${o.precision} m)`:""}</dd>
+    ${isFinite(o.lat)?`<dt>Voir sur</dt><dd><a href="${osm(o.lat,o.lon)}" target="_blank" rel="noopener">OpenStreetMap</a> · <a href="${geop(o.lat,o.lon)}" target="_blank" rel="noopener">Géoportail</a></dd>`:""}
+    <dt>Descriptif</dt><dd>${o.description?esc(o.description).replace(/\n/g,"<br>"):"—"}</dd>
+   </dl>
+   <button class="btn danger" id="del" type="button">Supprimer ce relevé</button>`;
+  $("back").onclick=closeDetail;
+  $("del").onclick=async()=>{
+    if(!armed){armed=true;$("del").textContent="Confirmer la suppression";return}
+    await dbDel(o.id);if(urls.has(o.id)){URL.revokeObjectURL(urls.get(o.id));urls.delete(o.id)}
+    obs=obs.filter(x=>x.id!==o.id);closeDetail();renderAll();
+  };
+}
+
+/* ---------- Formulaire ---------- */
+$("especes").innerHTML=SPECIES.map(s=>`<option value="${esc(s)}">`).join("");
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+$("date").value=today();
+let precision=null;
+function formMsg(t,kind){const m=$("formmsg");m.hidden=!t;m.textContent=t;m.className="msg"+(kind?" "+kind:"")}
+function setCoords(la,lo,note,acc){$("lat").value=la.toFixed(6);$("lon").value=lo.toFixed(6);precision=acc!=null?Math.round(acc):null;$("gpsnote").textContent=note||"";updatePickMarker(true)}
+function updatePickMarker(fly){
+  const la=parseFloat($("lat").value),lo=parseFloat($("lon").value);
+  if(pickMarker){map.removeLayer(pickMarker);pickMarker=null}
+  if(accCircle){map.removeLayer(accCircle);accCircle=null}
+  if(!isFinite(la)||!isFinite(lo)||$("pane-new").hidden)return;
+  pickMarker=L.marker([la,lo],{draggable:true,title:"Position du relevé (déplaçable)"}).addTo(map);
+  pickMarker.on("dragend",()=>{const p=pickMarker.getLatLng();setCoords(p.lat,p.lng,"Position ajustée à la main sur la carte.")});
+  if(precision)accCircle=L.circle([la,lo],{radius:precision,color:"#b8325e",weight:1,fillOpacity:.08,interactive:false}).addTo(map);
+  if(fly)map.setView([la,lo],Math.max(map.getZoom(),17));
+}
+["lat","lon"].forEach(i=>$(i).addEventListener("change",()=>{$(i).value=$(i).value.replace(",",".");precision=null;updatePickMarker(true)}));
+
+$("geoloc").onclick=()=>{
+  if(!navigator.geolocation){formMsg("La géolocalisation n'est pas disponible dans ce navigateur.","err");return}
+  $("geoloc").disabled=true;$("gpsnote").textContent="Recherche de la position…";
+  navigator.geolocation.getCurrentPosition(p=>{
+    $("geoloc").disabled=false;
+    setCoords(p.coords.latitude,p.coords.longitude,`Position GPS de l'appareil, précision ± ${Math.round(p.coords.accuracy)} m.`+(p.coords.accuracy>30?" Attendez quelques secondes à découvert et réessayez pour l'affiner.":""),p.coords.accuracy);
+  },err=>{
+    $("geoloc").disabled=false;
+    $("gpsnote").textContent=err.code===1?"Accès à la position refusé : autorisez la localisation pour ce site dans les réglages du navigateur.":"Position introuvable. Réessayez à découvert, ou pointez sur la carte.";
+  },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+};
+let picking=false;
+function startPick(){picking=true;$("map").classList.add("picking");$("pickbar").hidden=false;if(mobile())$("map").scrollIntoView({block:"center"})}
+function stopPick(){picking=false;$("map").classList.remove("picking");$("pickbar").hidden=true}
+$("pickbtn").onclick=startPick;$("pickcancel").onclick=stopPick;
+map.on("click",e=>{if(!picking)return;setCoords(e.latlng.lat,e.latlng.lng,"Position choisie sur la carte (vous pouvez déplacer le repère).");stopPick()});
+
+/* EXIF : position GPS et date de prise de vue */
+function readExif(buf){
+  const v=new DataView(buf);if(v.byteLength<4||v.getUint16(0)!==0xFFD8)return null;let off=2;
+  while(off<v.byteLength-4){const m=v.getUint16(off);if((m&0xFF00)!==0xFF00)return null;const len=v.getUint16(off+2);
+    if(m===0xFFE1&&v.getUint32(off+4)===0x45786966)return parseTiff(v,off+10);off+=2+len}
+  return null;
+}
+function parseTiff(v,t){
+  const le=v.getUint16(t)===0x4949;const u16=o=>v.getUint16(o,le),u32=o=>v.getUint32(o,le);
+  const ifd=o=>{const n=u16(o),r={};for(let i=0;i<n;i++){const e=o+2+i*12;r[u16(e)]={count:u32(e+4),vo:e+8}}return r};
+  const rat=(e,i)=>{const p=t+u32(e.vo)+i*8;return u32(p)/u32(p+4)};
+  const str=e=>{const p=e.count>4?t+u32(e.vo):e.vo;let s="";for(let i=0;i<e.count-1;i++)s+=String.fromCharCode(v.getUint8(p+i));return s};
+  const out={};const i0=ifd(t+u32(t+4));
+  if(i0[0x8825]){const g=ifd(t+u32(i0[0x8825].vo));
+    if(g[2]&&g[4]){const dms=e=>rat(e,0)+rat(e,1)/60+rat(e,2)/3600;let la=dms(g[2]),lo=dms(g[4]);
+      if(g[1]&&String.fromCharCode(v.getUint8(g[1].vo))==="S")la=-la;if(g[3]&&String.fromCharCode(v.getUint8(g[3].vo))==="W")lo=-lo;
+      if(isFinite(la)&&isFinite(lo)&&(la||lo)){out.lat=la;out.lon=lo}}}
+  if(i0[0x8769]){const x=ifd(t+u32(i0[0x8769].vo));if(x[0x9003]){const m=str(x[0x9003]).match(/^(\d{4}):(\d{2}):(\d{2})/);if(m)out.date=`${m[1]}-${m[2]}-${m[3]}`}}
+  return out;
+}
+let photoBlob=null;
+async function shrink(file){
+  try{const bmp=await createImageBitmap(file);const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+    const c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(b=>r(b||file),"image/jpeg",.85))}catch(e){return file}
+}
+async function takePhoto(file){
+  if(!file)return;
+  if(!file.type.startsWith("image/")){formMsg("Ce fichier n'est pas une image.","err");return}
+  formMsg("");let info=null;try{info=readExif(await file.arrayBuffer())}catch(e){}
+  photoBlob=await shrink(file);
+  const pv=$("preview");if(pv.src)URL.revokeObjectURL(pv.src);pv.src=URL.createObjectURL(photoBlob);pv.hidden=false;$("dropTxt").textContent="Changer de photo";
+  const got=[];
+  if(info&&isFinite(info.lat)){setCoords(info.lat,info.lon,"Coordonnées lues dans la photo.");got.push("position")}
+  if(info&&info.date){$("date").value=info.date;got.push("date")}
+  if(got.length)formMsg(`Photo lue : ${got.join(" et ")} récupérée${got.length>1?"s":""}.`,"ok");
+  else if(!$("lat").value)$("gpsnote").textContent="Pas de position dans cette photo : utilisez « Ma position » ou pointez sur la carte.";
+}
+$("photo").onchange=e=>takePhoto(e.target.files[0]);
+const drop=$("drop");
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>takePhoto(e.dataTransfer.files[0]));
+
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const la=parseFloat($("lat").value),lo=parseFloat($("lon").value);
+  if(!$("date").value){formMsg("Indiquez la date du relevé.","err");return}
+  if(!isFinite(la)||!isFinite(lo)||la<-90||la>90||lo<-180||lo>180){formMsg("Coordonnées manquantes ou invalides : latitude entre −90 et 90, longitude entre −180 et 180, en degrés décimaux.","err");return}
+  const num=id=>{const v=parseFloat($(id).value.replace(",","."));return isFinite(v)?v:null};
+  const o={id:newId(),espece:$("espece").value.trim(),date:$("date").value,hauteur:num("hauteur"),surface:num("surface"),
+    graines:document.querySelector('input[name="graines"]:checked').value,lat:la,lon:lo,precision,description:$("desc").value.trim(),photo:photoBlob,createdAt:Date.now()};
+  try{await dbPut(o)}catch(err){formMsg("Le relevé n'a pas été enregistré : "+(err&&err.name==="QuotaExceededError"?"stockage du navigateur plein. Faites une sauvegarde puis supprimez d'anciens relevés.":(err&&err.message)||"erreur inconnue"),"err");return}
+  obs.push(o);
+  $("form").reset();$("date").value=today();$("g-non").checked=true;photoBlob=null;precision=null;$("preview").hidden=true;$("dropTxt").textContent="Prendre ou choisir une photo";$("gpsnote").textContent="";
+  updatePickMarker();formMsg("Relevé enregistré.","ok");renderAll();
+});
+
+/* ---------- Export / sauvegarde / import ---------- */
+function dataMsg(t,kind){const m=$("datamsg");m.hidden=!t;m.textContent=t;m.className="msg"+(kind?" "+kind:"")}
+function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}
+const HEAD=["id","espece","date","hauteur_m","surface_m2","graines","latitude","longitude","precision_m","description","photo"];
+$("exportCsv").onclick=()=>{
+  if(!obs.length){dataMsg("Aucun relevé à exporter.");return}
+  const q=v=>{const s=v==null?"":String(v);return /[;"\n\r]/.test(s)?`"${s.replace(/"/g,'""')}"`:s};
+  const csv="﻿"+[HEAD.join(";")].concat(obs.map(o=>[o.id,o.espece,o.date,o.hauteur,o.surface,o.graines,o.lat,o.lon,o.precision,o.description,o.photo?"oui":"non"].map(q).join(";"))).join("\r\n");
+  download(new Blob([csv],{type:"text/csv;charset=utf-8"}),`pokinvasive_${today()}.csv`);dataMsg("CSV exporté (séparateur « ; », lisible avec read.csv2 sous R).","ok");
+};
+const toB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)});
+$("exportJson").onclick=async()=>{
+  if(!obs.length){dataMsg("Aucun relevé à sauvegarder.");return}
+  dataMsg("Préparation de la sauvegarde…");
+  const rows=[];for(const o of obs){const {photo,...r}=o;r.photo=photo?await toB64(photo):null;rows.push(r)}
+  download(new Blob([JSON.stringify({format:"pokinvasive",version:1,exporte:new Date().toISOString(),releves:rows})],{type:"application/json"}),`pokinvasive_sauvegarde_${today()}.json`);
+  dataMsg(`Sauvegarde de ${rows.length} relevé${rows.length>1?"s":""} (photos incluses) téléchargée.`,"ok");
+};
+function parseCsv(txt){
+  txt=txt.replace(/^﻿/,"");const rows=[];let row=[],f="",q=false;
+  for(let i=0;i<txt.length;i++){const c=txt[i];
+    if(q){if(c==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===";"){row.push(f);f=""}else if(c==="\n"){row.push(f.replace(/\r$/,""));rows.push(row);row=[];f=""}else f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}
+  return rows.filter(r=>r.some(x=>x!==""));
+}
+$("importFile").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  try{
+    const txt=await file.text();let items=[];
+    if(file.name.toLowerCase().endsWith(".json")){
+      const d=JSON.parse(txt);if(!d||!Array.isArray(d.releves))throw new Error("ce fichier n'est pas une sauvegarde Pokinvasive");
+      for(const r of d.releves){let photo=null;if(r.photo){photo=await (await fetch(r.photo)).blob()}items.push({...r,photo})}
+    }else{
+      const rows=parseCsv(txt);const h=rows.shift().map(x=>x.trim());const ix=n=>h.indexOf(n);
+      if(ix("latitude")<0||ix("longitude")<0)throw new Error("colonnes latitude et longitude introuvables");
+      const n=v=>{const x=parseFloat(String(v||"").replace(",","."));return isFinite(x)?x:null};
+      for(const r of rows){const g=k=>ix(k)>=0?r[ix(k)]:"";
+        items.push({id:g("id")||newId(),espece:g("espece"),date:g("date"),hauteur:n(g("hauteur_m")),surface:n(g("surface_m2")),graines:g("graines")||"non",
+          lat:n(g("latitude")),lon:n(g("longitude")),precision:n(g("precision_m")),description:g("description"),photo:null,createdAt:Date.now()})}
+    }
+    let added=0,skipped=0;const ids=new Set(obs.map(o=>o.id));
+    for(const it of items){if(ids.has(it.id)){skipped++;continue}if(!isFinite(it.lat)||!isFinite(it.lon)){skipped++;continue}await dbPut(it);obs.push(it);ids.add(it.id);added++}
+    renderAll();dataMsg(`${added} relevé${added>1?"s":""} importé${added>1?"s":""}`+(skipped?`, ${skipped} ignoré${skipped>1?"s":""} (déjà présents ou sans coordonnées).`:"."),"ok");
+  }catch(err){dataMsg("Import impossible : "+(err.message||err)+".","err")}
+};
+
+/* ---------- Démarrage ---------- */
+(async()=>{
+  try{idb=await openDB();obs=await dbAll()}catch(e){formMsg("Stockage local indisponible (navigation privée ?). Les relevés ne pourront pas être enregistrés.","err")}
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+  renderAll();
+  const pts=obs.filter(o=>isFinite(o.lat)).map(o=>[o.lat,o.lon]);
+  if(pts.length>1)map.fitBounds(pts,{padding:[40,40],maxZoom:16});else if(pts.length===1)map.setView(pts[0],16);
+})();
+})();
+</script>
+</body>
+</html>
